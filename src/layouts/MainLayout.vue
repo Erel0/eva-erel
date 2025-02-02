@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useStore } from 'vuex'
+import { useStore } from '../store'
 import { useRouter } from 'vue-router'
 import { onBeforeMount } from 'vue'
 
@@ -8,7 +8,6 @@ const store = useStore()
 const router = useRouter()
 
 const isAuthenticated = computed(() => store.getters.isAuthenticated)
-const user = computed(() => store.getters.user)
 
 const handleLogout = () => {
     store.dispatch('logout')
@@ -16,7 +15,7 @@ const handleLogout = () => {
 }
 
 onBeforeMount(() => {
-    if (!store.state.isAuthenticated) {
+    if (!store.state.auth) {
         router.push('/login')
     }
 })
@@ -41,7 +40,7 @@ onBeforeMount(() => {
 
                     <div v-if="isAuthenticated" class="flex items-center space-x-6">
                         <span class="text-gray-600">
-                            Welcome, {{ user?.username }}
+                            Welcome
                         </span>
                         <button @click="handleLogout"
                             class="px-4 py-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-medium transition-all duration-200">

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create an Axios instance
 const axiosInstance = axios.create({
-    baseURL: 'https://dummyjson.com', // Base URL for your API
+    baseURL: 'https://iapitest.eva.guru', // Base URL for your API
     headers: {
         'Content-Type': 'application/json',
     }

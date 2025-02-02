@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useStore } from 'vuex'
+import { useStore } from '../store'
 import { useRouter } from 'vue-router'
 
 const store = useStore()
 const router = useRouter()
-const email = ref('emilys')
-const password = ref('emilyspass')
+const email = ref('homework@eva.guru')
+const password = ref('Homeworkeva1**')
 const rememberMe = ref(false)
 const error = computed(() => store.getters.error)
 
@@ -35,7 +35,7 @@ const handleLogin = async () => {
                 <div class="space-y-4">
                     <div>
                         <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
-                        <input id="email" v-model="email" type="text" required
+                        <input id="email" v-model="email" type="email" required
                             class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:ring-emerald-500 focus:outline-none sm:text-sm"
                             placeholder="Enter your email" />
                     </div>

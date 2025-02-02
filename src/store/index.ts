@@ -1,10 +1,45 @@
-import { createStore } from 'vuex'
+import type { InjectionKey } from 'vue';
 import axiosInstance from '../utils/axiosInstance'
 
-interface UserState {
-    isAuthenticated: boolean;
-    user: any;
+import { createStore, useStore as baseUseStore, Store } from 'vuex'
+
+
+export interface State {
+    auth: LoginResponse | null;
     error: string | null;
+}
+
+// Add this interface for strongly typed getters
+export interface StoreGetters {
+    isAuthenticated(state: State): boolean;
+    auth(state: State): TokenData | null;
+    error(state: State): string | null;
+}
+
+// Update the Store type definition
+export type TypedStore = Omit<Store<State>, 'getters'> & {
+    getters: {
+        isAuthenticated: boolean;
+        auth: TokenData | null;
+        error: string | null;
+    }
+}
+
+// Update the key injection
+export const key: InjectionKey<TypedStore> = Symbol()
+
+interface TokenData {
+    AccessToken: string;
+    RefreshToken: string;
+    TokenType: string;
+    ExpiresAt: string;
+}
+
+interface LoginResponse {
+    ApiStatus: boolean;
+    ApiStatusCode: number;
+    ApiStatusMessage: string;
+    Data: TokenData;
 }
 
 interface LoginPayload {
@@ -12,29 +47,28 @@ interface LoginPayload {
     password: string;
 }
 
-export const store = createStore({
-    state(): UserState {
+export interface Getters {
+    isAuthenticated: boolean;
+    auth: TokenData | null;
+    error: string | null;
+}
+
+export const store = createStore<State>({
+    state() {
         return {
-            isAuthenticated: JSON.parse(localStorage.getItem('isAuthenticated') || 'false'),
-            user: JSON.parse(localStorage.getItem('user') || 'null'),
+            auth: JSON.parse(localStorage.getItem('auth') || 'null'),
             error: null
         }
     },
     mutations: {
-        SET_AUTH(state: UserState, auth: boolean) {
-            state.isAuthenticated = auth;
-            localStorage.setItem('isAuthenticated', JSON.stringify(auth));
-        },
-        SET_USER(state: UserState, user: any) {
-            console.log('user set', user)
-            state.user = user;
-            localStorage.setItem('user', JSON.stringify(user));
-            if (user && user.accessToken) {
-                localStorage.setItem('accessToken', user.accessToken);
+        SET_AUTH(state: State, auth: LoginResponse | null) {
+            state.auth = auth;
+            localStorage.setItem('auth', JSON.stringify(auth));
+            if (auth && auth.Data.AccessToken) {
+                localStorage.setItem('accessToken', auth.Data.AccessToken);
             }
-            console.log('user setted')
         },
-        SET_ERROR(state: UserState, error: string | null) {
+        SET_ERROR(state: State, error: string | null) {
             state.error = error;
         }
     },
@@ -48,67 +82,52 @@ export const store = createStore({
                     Scope: "amazon_data",
                     ClientId: "C0001",
                     ClientSecret: "SECRET0001",
-                    RedirectUri: "test"
+                    RedirectUri: "https://api.eva.guru"
                 };
 
-                const response = await fetch('https://dummyjson.com/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        username: payload.email, // Assuming email is used as username
-                        password: payload.password,
-                        expiresInMins: 1
-                    }),
-                });
+                const response = await axiosInstance.post<LoginResponse>('/oauth/token', loginData);
 
-                const data = await response.json();
-
-                if (response.ok) {
-                    console.log(data)
-                    commit('SET_AUTH', true);
-                    commit('SET_USER', data);
+                if (response.status === 200) {
+                    const data = response.data;
+                    commit('SET_AUTH', data);
                     commit('SET_ERROR', null);
                     return true;
                 } else {
-                    commit('SET_ERROR', data.message || 'Login failed');
+                    commit('SET_ERROR', response.data?.ApiStatusMessage || 'Login failed');
                     return false;
                 }
-            } catch (error) {
-                commit('SET_ERROR', 'Login failed');
+            } catch (error: any) {
+                commit('SET_ERROR', error.response?.data?.ApiStatusMessage || 'Login failed');
                 return false;
             }
         },
         logout({ commit }) {
-            commit('SET_AUTH', false);
-            commit('SET_USER', null);
-            localStorage.removeItem('isAuthenticated');
-            localStorage.removeItem('user');
+            commit('SET_AUTH', null);
+            localStorage.removeItem('auth');
             localStorage.removeItem('accessToken');
         },
         async getUser({ commit }) {
             try {
                 const response = await axiosInstance.get('/auth/me');
-
                 return response.data;
             } catch (error) {
-                commit('SET_AUTH', false);
-                commit('SET_USER', null);
-                localStorage.removeItem('isAuthenticated');
-                localStorage.removeItem('user');
+                commit('SET_AUTH', null);
+                localStorage.removeItem('auth');
                 localStorage.removeItem('accessToken');
-                // Redirect to login page
                 window.location.href = '/login';
                 throw new Error('Failed to fetch data');
             }
         },
     },
     getters: {
-        isAuthenticated: (state: UserState) => state.isAuthenticated,
-        user: (state: UserState) => state.user,
-        error: (state: UserState) => state.error
+        isAuthenticated: (state: State): boolean => !!state.auth,
+        auth: (state: State): LoginResponse | null => state.auth,
+        error: (state: State): string | null => state.error
     }
 })
 
-export default store
+
+export function useStore(): TypedStore {
+    return baseUseStore(key)
+}
+

@@ -6,9 +6,8 @@
     </div>
     <div class="bg-white rounded-lg shadow p-6 mt-4">
       <h2 class="text-xl font-semibold mb-4">User Information</h2>
-      <div v-if="user">
-        <p><strong>Name:</strong> {{ user?.name }}</p>
-        <p><strong>Email:</strong> {{ user?.email }}</p>
+      <div v-if="userData">
+        <p><strong>Access Token:</strong> {{ userData.Data.AccessToken }}</p>
       </div>
       <div v-else>
         <p>No user information available.</p>
@@ -19,20 +18,12 @@
 
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useStore } from 'vuex'
+import { ref, computed } from 'vue'
+import { useStore } from '../store'
 
 const store = useStore()
-const user = ref(null)
-
-onMounted(async () => {
-  try {
-    const userData = await store.dispatch('getUser')
-    user.value = userData
-  } catch (error) {
-    console.error('Failed to fetch user data:', error)
-  }
-})
+const userData = computed(() => store.state.auth)
+const isAuthenticated = computed(() => store.getters.isAuthenticated)
 
 // Chart configuration
 const chartOptions = ref({
