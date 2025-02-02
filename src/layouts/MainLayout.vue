@@ -7,7 +7,7 @@ import { onBeforeMount } from 'vue'
 const store = useStore()
 const router = useRouter()
 
-const isAuthenticated = computed(() => store.getters.isAuthenticated)
+const user = computed(() => store.state.userInformation?.Data.user)
 
 const handleLogout = () => {
     store.dispatch('logout')
@@ -28,19 +28,15 @@ onBeforeMount(() => {
             <nav class="container mx-auto px-4 py-3">
                 <div class="flex items-center justify-between">
                     <div class="space-x-6">
-                        <router-link to="/" active-class="text-emerald-600"
-                            class="text-gray-700 hover:text-emerald-600 font-medium transition-all duration-200 hover:scale-105">
-                            Dashboard
-                        </router-link>
                         <router-link to="/dashboard" active-class="text-emerald-600"
                             class="text-gray-700 hover:text-emerald-600 font-medium transition-all duration-200 hover:scale-105">
                             Dashboard
                         </router-link>
                     </div>
 
-                    <div v-if="isAuthenticated" class="flex items-center space-x-6">
+                    <div v-if="user" class="flex items-center space-x-6">
                         <span class="text-gray-600">
-                            Welcome
+                            {{ user.userId }}
                         </span>
                         <button @click="handleLogout"
                             class="px-4 py-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-medium transition-all duration-200">

@@ -1,63 +1,44 @@
 import type { InjectionKey } from 'vue';
 import axiosInstance from '../utils/axiosInstance'
-
 import { createStore, useStore as baseUseStore, Store } from 'vuex'
-
+import type { UserInformationResponse, UserInformationPayload } from './types/userInformation'
+import type { LoginResponse, LoginPayload, TokenData } from './types/login'
+import type { DailySalesResponse, DailySalesPayload } from './types/dailySalesOverview'
 
 export interface State {
     auth: LoginResponse | null;
     error: string | null;
+    userInformation: UserInformationResponse | null;
+    dailySalesOverview: DailySalesResponse | null;
 }
 
-// Add this interface for strongly typed getters
-export interface StoreGetters {
-    isAuthenticated(state: State): boolean;
-    auth(state: State): TokenData | null;
-    error(state: State): string | null;
-}
-
-// Update the Store type definition
 export type TypedStore = Omit<Store<State>, 'getters'> & {
     getters: {
         isAuthenticated: boolean;
-        auth: TokenData | null;
+        auth: LoginResponse | null;
         error: string | null;
+        userInformation: UserInformationResponse | null;
+        dailySalesOverview: DailySalesResponse | null;
     }
-}
-
-// Update the key injection
-export const key: InjectionKey<TypedStore> = Symbol()
-
-interface TokenData {
-    AccessToken: string;
-    RefreshToken: string;
-    TokenType: string;
-    ExpiresAt: string;
-}
-
-interface LoginResponse {
-    ApiStatus: boolean;
-    ApiStatusCode: number;
-    ApiStatusMessage: string;
-    Data: TokenData;
-}
-
-interface LoginPayload {
-    email: string;
-    password: string;
 }
 
 export interface Getters {
     isAuthenticated: boolean;
     auth: TokenData | null;
     error: string | null;
+    userInformation: any | null;
+    dailySalesOverview: DailySalesResponse | null;
 }
+
+export const key: InjectionKey<TypedStore> = Symbol()
 
 export const store = createStore<State>({
     state() {
         return {
             auth: JSON.parse(localStorage.getItem('auth') || 'null'),
-            error: null
+            error: null,
+            userInformation: null,
+            dailySalesOverview: null
         }
     },
     mutations: {
@@ -70,6 +51,12 @@ export const store = createStore<State>({
         },
         SET_ERROR(state: State, error: string | null) {
             state.error = error;
+        },
+        SET_USER_INFORMATION(state: State, userInformation: any) {
+            state.userInformation = userInformation;
+        },
+        SET_DAILY_SALES_OVERVIEW(state: State, data: DailySalesResponse | null) {
+            state.dailySalesOverview = data;
         }
     },
     actions: {
@@ -89,7 +76,7 @@ export const store = createStore<State>({
 
                 if (response.status === 200) {
                     const data = response.data;
-                    commit('SET_AUTH', data);
+                    commit('SET_AUTH', { ...data, email: payload.email });
                     commit('SET_ERROR', null);
                     return true;
                 } else {
@@ -118,14 +105,48 @@ export const store = createStore<State>({
                 throw new Error('Failed to fetch data');
             }
         },
+        async getUserInformation({ commit, state }) {
+            try {
+                if (!state.auth?.email) {
+                    throw new Error('Email not found in auth state');
+                }
+
+                const payload: UserInformationPayload = {
+                    email: state.auth.email
+                };
+
+                const response = await axiosInstance.post('/user/user-information', payload);
+                if (response.data) {
+                    commit('SET_USER_INFORMATION', response.data);
+                    console.log(response.data)
+                    return response.data;
+                }
+            } catch (error: any) {
+                commit('SET_ERROR', error.response?.data?.ApiStatusMessage || 'Failed to fetch user information');
+                throw error;
+            }
+        },
+        async getDailySalesOverview({ commit }, payload: DailySalesPayload) {
+            try {
+                const response = await axiosInstance.post('/data/daily-sales-overview/', payload);
+                if (response.data) {
+                    commit('SET_DAILY_SALES_OVERVIEW', response.data);
+                    return response.data;
+                }
+            } catch (error: any) {
+                commit('SET_ERROR', error.response?.data?.ApiStatusMessage || 'Failed to fetch daily sales overview');
+                throw error;
+            }
+        }
     },
     getters: {
         isAuthenticated: (state: State): boolean => !!state.auth,
         auth: (state: State): LoginResponse | null => state.auth,
-        error: (state: State): string | null => state.error
+        error: (state: State): string | null => state.error,
+        userInformation: (state: State): UserInformationResponse | null => state.userInformation,
+        dailySalesOverview: (state: State): DailySalesResponse | null => state.dailySalesOverview
     }
 })
-
 
 export function useStore(): TypedStore {
     return baseUseStore(key)
