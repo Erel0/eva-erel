@@ -1,132 +1,70 @@
 <template>
-  <div class="p-4">
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="flex justify-between items-center mb-4">
-        <div class="flex flex-wrap gap-4">
-          <label v-for="series in availableSeries" :key="series.id" class="flex items-center space-x-2 cursor-pointer">
-            <input type="checkbox" v-model="series.visible" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" />
-            <span class="text-sm font-medium text-gray-700">{{ series.name }}</span>
-          </label>
+  <div class="min-h-screen">
+    <div class="mx-auto space-y-6">
+      <!-- Chart Section -->
+      <DailySalesChart :chart-data="chart" :selected-bands="selectedBands" @update:selected-days="selectedDays = $event"
+        @column-click="handleColumnClick" />
+
+      <!-- SKU List Table -->
+      <div v-if="selectedColumnsData.length > 0" class="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-xl font-semibold text-gray-800">SKU List</h2>
+          <div class="text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg">
+            <span class="font-medium">Selected Date:</span> {{ dailySalesSkuList?.Data?.item?.selectedDate }}
+            <template v-if="selectedColumnsData.length === 2">
+              <span class="mx-2">|</span>
+              <span class="font-medium">Comparison Date:</span> {{ selectedColumnsData[1].date }}
+            </template>
+          </div>
         </div>
-        <select v-model="selectedDays" @change="fetchDailySales"
-          class="border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="7">Last 7 Days</option>
-          <option value="14">Last 14 Days</option>
-          <option value="30">Last 30 Days</option>
-          <option value="60">Last 60 Days</option>
-        </select>
-      </div>
-      <highcharts :options="chartOptions"></highcharts>
-    </div>
 
-    <div class="bg-white rounded-lg shadow p-6 mt-4">
-      <h2 class="text-xl font-semibold mb-4">User Information</h2>
-      <div v-if="auth">
-        <p><strong>Access Token:</strong> {{ auth.Data.AccessToken }}</p>
-      </div>
-      <div v-else>
-        <p>No user information available.</p>
+        <SkuListTable :sku-list="displayedItems" :is-loading="isLoading" :skuRefundRate="skuRefundRate"
+          :currency="dailySalesSkuList?.Data?.Currency || '$'" :has-comparison="selectedColumnsData.length === 2"
+          :current-page="currentPage" :items-per-page="itemsPerPage" :total-items="totalItems"
+          @update:current-page="handlePageChange" />
       </div>
     </div>
-
   </div>
 </template>
 
-
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useStore } from '@/store'
 import type { DailySalesPayload } from '../store/types/dailySalesOverview'
+import type { SkuListItem, DailySalesSkuListResponse } from '../store/types/dailySalesSkuList'
+import DailySalesChart from '@/components/DailySalesChart.vue'
+import SkuListTable from '@/components/SkuListTable.vue'
 
 const store = useStore()
-const auth = computed(() => store.getters.auth)
 const chart = computed(() => store.getters.dailySalesOverview)
+const dailySalesSkuList = computed(() => store.getters.dailySalesSkuList)
+const skuRefundRate = computed(() => store.getters.skuRefundRate)
 const selectedDays = ref(30)
+const selectedBands = ref<number[]>([])
+const selectedColumnsData = ref<{ date: string; data: Record<string, number> }[]>([])
 
-const availableSeries = ref([
-  { id: 'totalSales', name: 'Total Sales', visible: true, color: '#4F46E5', dataKey: 'amount' },
-  { id: 'shipping', name: 'Shipping', visible: true, color: '#10B981', dataKey: 'fbaShippingAmount' },
-  { id: 'profit', name: 'Profit', visible: true, color: '#10B981', dataKey: 'profit' },
-  { id: 'fbaSales', name: 'FBA Sales', visible: true, color: '#10B981', dataKey: 'fbaAmount' },
-  { id: 'fbmSales', name: 'FBM Sales', visible: true, color: '#F59E0B', dataKey: 'fbmAmount' }
-])
+// Pagination state
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
+const totalItems = ref(0)
+const localSkuList = ref<SkuListItem[]>([])
+const isLoading = ref(false)
 
-const chartOptions = computed(() => ({
-  chart: {
-    type: 'column'
-  },
-  title: {
-    text: 'Daily Sales Overview'
-  },
-  xAxis: {
-    categories: chart.value?.Data?.item?.map(item => item.date) || [],
-    labels: {
-      rotation: -45,
-      style: {
-        fontSize: '10px'
-      }
-    }
-  },
-  yAxis: [{
-    title: {
-      text: 'Amount ($)'
-    }
-  }],
-  tooltip: {
-    shared: true,
-    formatter: function (this: Highcharts.TooltipFormatterContextObject): string {
-      let tooltip = `<b>${this.x}</b><br/>`;
-      this.points?.forEach(point => {
-        const value = point.y ?? 0;
-        tooltip += `${point.series.name}: $${value.toFixed(2)}<br/>`;
-      });
-      return tooltip;
-    }
-  },
-  series: availableSeries.value
-    .filter(series => series.visible)
-    .map(series => ({
-      name: series.name,
-      data: chart.value?.Data?.item?.map(item => item[series.dataKey as keyof typeof item]) || [],
-      color: series.color,
-      cursor: 'pointer',
-      events: {
-        click: function (this: any, event: any) {
-          const clickedColumnIndex = event.point.index;
+// Computed property for displayed items
+const displayedItems = computed(() => {
+  const startIndex = (currentPage.value - 1) * itemsPerPage.value
+  const endIndex = startIndex + itemsPerPage.value
+  return localSkuList.value.slice(startIndex, endIndex)
+})
 
-          // Reset all columns in all series to their original colors
-          this.chart.series.forEach((series: any) => {
-            series.data.forEach((point: any, index: number) => {
-              if (index === clickedColumnIndex) {
-                point.update({
-                  color: '#E9D5FF' // Light purple for the entire column
-                }, false);
-              } else {
-                point.update({
-                  color: series.options.color // Reset to original color
-                }, false);
-              }
-            });
-          });
-
-          this.chart.redraw();
-        }
-      }
-    })),
-  plotOptions: {
-    column: {
-      stacking: 'normal',
-      states: {
-        hover: {
-          brightness: 0.1
-        }
-      }
-    }
-  },
-  credits: {
-    enabled: false
+onMounted(async () => {
+  try {
+    await store.dispatch('getUserInformation');
+    await fetchDailySales(); // Fetch daily sales after user information is loaded
+  } catch (error) {
+    console.error('Failed to fetch user information:', error);
   }
-}))
+});
 
 const fetchDailySales = async () => {
   try {
@@ -139,18 +77,139 @@ const fetchDailySales = async () => {
     }
 
     await store.dispatch('getDailySalesOverview', payload)
+    // Reset selections after fetching new data
+    selectedBands.value = []
+    selectedColumnsData.value = []
   } catch (error) {
     console.error('Failed to fetch daily sales:', error)
   }
 }
 
-onMounted(async () => {
-  try {
-    await store.dispatch('getUserInformation');
-    await fetchDailySales(); // Fetch daily sales after user information is loaded
-  } catch (error) {
-    console.error('Failed to fetch user information:', error);
+const updateSelectedColumnsData = () => {
+  selectedColumnsData.value = selectedBands.value.map(index => {
+    const item = chart.value?.Data?.item?.[index]
+    return {
+      date: item?.date || '',
+      data: {}
+    }
+  })
+}
+
+const handleColumnClick = (clickedIndex: number) => {
+  const currentIndex = selectedBands.value.indexOf(clickedIndex);
+
+  if (currentIndex === -1) {
+    if (selectedBands.value.length === 2) {
+      // Remove the first selected column and add the new one
+      selectedBands.value.shift();
+      selectedBands.value.push(clickedIndex);
+    } else {
+      selectedBands.value.push(clickedIndex);
+    }
+  } else {
+    // Remove if already selected
+    selectedBands.value.splice(currentIndex, 1);
   }
-});
+
+  updateSelectedColumnsData();
+}
+
+
+const handlePageChange = async (page: number) => {
+  currentPage.value = page
+  await fetchSkuListData()
+}
+
+const fetchSkuListData = async () => {
+  if (!selectedColumnsData.value || selectedColumnsData.value.length === 0) return
+
+  // Only check for new data if we're not changing selection
+  const isChangingPage = !isLoading.value
+  const currentStartIndex = (currentPage.value - 1) * itemsPerPage.value
+  const needNewData = isChangingPage && currentStartIndex >= localSkuList.value.length && currentStartIndex < totalItems.value
+
+  if (isChangingPage && !needNewData && localSkuList.value.length > 0) {
+    return // Use existing data if we don't need new data and just changing pages
+  }
+
+  isLoading.value = true
+  const marketplace = store.getters.userInformation?.Data.user.store[0]?.marketplaceName || ''
+  const sellerId = store.getters.userInformation?.Data.user.store[0]?.storeId || ''
+  const isDaysCompare = selectedColumnsData.value.length === 2 ? 1 : 0
+
+  try {
+    // Calculate the API page number based on the current page
+    const apiPageNumber = Math.ceil(currentPage.value * itemsPerPage.value / 30)
+
+    const getDailySalesSkuList: DailySalesSkuListResponse = await store.dispatch('getDailySalesSkuList', {
+      marketplace,
+      sellerId,
+      salesDate: selectedColumnsData.value[0].date,
+      salesDate2: selectedColumnsData.value.length === 2 ? selectedColumnsData.value[1].date : selectedColumnsData.value[0].date,
+      pageSize: 30,
+      pageNumber: apiPageNumber,
+      isDaysCompare
+    })
+
+    await store.dispatch('getSkuRefundRate', {
+      marketplace,
+      sellerId,
+      skuList: getDailySalesSkuList.Data.item.skuList,
+      requestedDay: 60,
+    })
+
+    // Update total items
+    if (dailySalesSkuList.value?.Data?.item?.total !== undefined) {
+      totalItems.value = dailySalesSkuList.value.Data.item.total
+    }
+
+    // If there's no data, reset everything
+    if (!dailySalesSkuList.value?.Data?.item?.skuList?.length) {
+      localSkuList.value = []
+      totalItems.value = 0
+      return
+    }
+
+    // Store all fetched items
+    const newSkuList = dailySalesSkuList.value?.Data?.item?.skuList || []
+
+    // If it's the first page or selection changed, replace the entire list
+    if (apiPageNumber === 1 || !isChangingPage) {
+      localSkuList.value = newSkuList
+    } else {
+      // Otherwise, append new items
+      localSkuList.value = [...localSkuList.value, ...newSkuList]
+    }
+
+    // Update total items if we received less than expected
+    if (newSkuList.length < 30) {
+      totalItems.value = (apiPageNumber - 1) * 30 + newSkuList.length
+    }
+  } catch (error) {
+    console.error('Failed to fetch SKU list:', error)
+    isLoading.value = false
+    localSkuList.value = []
+    totalItems.value = 0
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Update the watch function for selectedColumnsData
+watch(() => selectedColumnsData.value, async (newData) => {
+  if (!newData || newData.length === 0) return
+  currentPage.value = 1 // Reset to first page when selection changes
+  isLoading.value = true // Set loading before fetching new data
+  await fetchSkuListData()
+}, { deep: true })
+
+// Add watcher for selectedDays
+watch(() => selectedDays.value, async () => {
+  await fetchDailySales()
+  if (selectedColumnsData.value.length > 0) {
+    currentPage.value = 1 // Reset to first page when days change
+    await fetchSkuListData()
+  }
+})
 
 </script>

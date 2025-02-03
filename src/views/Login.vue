@@ -16,7 +16,6 @@ const handleLogin = async () => {
         password: password.value,
         rememberMe: rememberMe.value
     })
-
     if (success) {
         router.push('/dashboard')
     }
