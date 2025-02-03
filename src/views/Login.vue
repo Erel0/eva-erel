@@ -7,14 +7,12 @@ const store = useStore()
 const router = useRouter()
 const email = ref('homework@eva.guru')
 const password = ref('Homeworkeva1**')
-const rememberMe = ref(false)
 const error = computed(() => store.getters.error)
 
 const handleLogin = async () => {
     const success = await store.dispatch('login', {
         email: email.value,
         password: password.value,
-        rememberMe: rememberMe.value
     })
     if (success) {
         router.push('/dashboard')
@@ -44,15 +42,6 @@ const handleLogin = async () => {
                             class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:ring-emerald-500 focus:outline-none sm:text-sm"
                             placeholder="Enter your password" />
                     </div>
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center">
-                        <input id="remember" type="checkbox" v-model="rememberMe"
-                            class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded" />
-                        <label for="remember" class="ml-2 block text-sm text-gray-700">Remember me</label>
-                    </div>
-                    <a href="#" class="text-sm text-emerald-600 hover:text-emerald-500">Forgot password?</a>
                 </div>
 
                 <div v-if="error" class="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">

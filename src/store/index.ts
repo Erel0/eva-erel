@@ -139,7 +139,6 @@ export const store = createStore<State>({
                 const response = await axiosInstance.post('/user/user-information', payload);
                 if (response.data) {
                     commit('SET_USER_INFORMATION', response.data);
-                    console.log(response.data)
                     return response.data;
                 }
             } catch (error: any) {
